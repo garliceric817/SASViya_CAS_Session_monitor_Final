@@ -35,7 +35,6 @@ def get_cas_info(cas_server, port, bt):
         # uuids = [item['uuid'] for item in data if 'uuid' in item]
         # print(uuids)
         node_connect_status = {item['name']: item['connected'] for item in data}
-        print(node_connect_status)
         # print(data)
         return node_connect_status
     else:
