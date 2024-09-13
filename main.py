@@ -11,8 +11,7 @@ cas_endpoint = "tksviya.unx.sas.com"
 BT = get_bearer_token(endpoint, "Jask", "demopw")
 # Define CAS API URL
 # cas_path = "cas/nodes"
-cas_port = 47384 #47839
-
+cas_port = 47384 #47384
 
 
 # define prmetheus metrics
@@ -24,18 +23,38 @@ session_mem_usage_gauge = Gauge('cas_session_mem', 'MEM usage of sessions', ['se
 def fetch_and_update_prometrics():
     cas_node_status = get_cas_info(cas_endpoint, cas_port, BT)
     print(cas_node_status)
-    for server in cas_node_status:
-        cas_node_status_gauge.labels(cas_node=server).set(1 if cas_node_status[server] is True else 0)
+    try:
+        for server in cas_node_status:
+            cas_node_status_gauge.labels(cas_node=server).set(1 if cas_node_status[server] is True else 0)
+    except IOError:
+        print("Cant get node status")
     return
 
 
 # get CPU & Mem usage of each session.
-def fetch_and_update_prometrics_cpu_mem():
+def fetch_and_update_prometrics_cpu_mem(last_times_session_list):
     session_list = get_session(cas_endpoint, cas_port, BT)
+
+    # remove gone sessions
+    for session_name in last_times_session_list:
+        try:
+            if session_name not in session_list:
+                print(f'{session_name} is gone, remove corresponding metrics')
+                node_type = ["controller", "backup-controller", "worker"]
+                for node in node_type:
+                    # session_cpu_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    # session_mem_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    session_cpu_usage_gauge.remove(session_name, node)
+                    session_mem_usage_gauge.remove(session_name, node)
+        except IOError:
+            print('First layer exception')
+            continue
+
     print(session_list)
     # for loop for each Session
     for session_name in session_list:
         session_on_node = get_session_node(cas_endpoint, cas_port, BT, session_list[session_name])
+        print(session_name)
         print(session_on_node)
 
         controller_cpu_sum = 0
@@ -48,7 +67,18 @@ def fetch_and_update_prometrics_cpu_mem():
         try:
         # for loop for each PID on a node
             for node in session_on_node:
-                cpu_mem_list = get_grid_info(cas_endpoint, cas_port, BT, node, session_on_node[node])
+                try:
+                    cpu_mem_list = get_grid_info(cas_endpoint, cas_port, BT, node, session_on_node[node])
+                except IOError:
+                    for i in range(3):
+                        print(f"retry {i+1}")
+                        time.sleep(30)
+                        cpu_mem_list = get_grid_info(cas_endpoint, cas_port, BT, node, session_on_node[node])
+                        if cpu_mem_list is None:
+                            continue
+                        else:
+                            break
+
                 # [0] = CPU, [1] = MEM
                 if "controller" in node:
                     controller_cpu_sum += int(cpu_mem_list[0])
@@ -72,38 +102,50 @@ def fetch_and_update_prometrics_cpu_mem():
             # except requests.RequestException as e:
             #     print(f"Error fetching data from {session_name}: {e}")
             #     continue
-        except:     # Set all metrics value = 0 of disappeared session
+        except IOError:     # Set all metrics value = 0 of disappeared session
             print(f"Session - {session_name} is gone, set all metrics = 0")
-            node_type = ["controller", "backup-controller", "worker"]
-            for node in node_type:
-                session_cpu_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
-                session_mem_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+            node_type_list = ["worker", "backup-controller", "controller"]
+            try:
+                for node in node_type_list:
+                    # session_cpu_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    # session_mem_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    session_cpu_usage_gauge.remove(session_name, node)
+                    session_mem_usage_gauge.remove(session_name, node)
+            except IOError:
+                print('middle layer exception')
+                continue
 
-    # Set all metrics value = 0 of disappeared session
     session_list_final = get_session(cas_endpoint, cas_port, BT)
+    # remove gone session
     for session_name in session_list:
-        if session_name not in session_list_final:
-            node_type = ["controller", "backup-controller", "worker"]
-            for node in node_type:
-                session_cpu_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
-                session_mem_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+        try:
+            if session_name not in session_list_final:
+                print(f'{session_name} is gone, remove corresponding metrics')
+                node_type = ["controller", "backup-controller", "worker"]
+                for node in node_type:
+                    # session_cpu_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    # session_mem_usage_gauge.labels(session_name=session_name, node_type=node).set(0)
+                    session_cpu_usage_gauge.remove(session_name, node)
+                    session_mem_usage_gauge.remove(session_name, node)
+        except IOError:
+            print('last layer exception')
+            continue
 
-    return
+    return session_list_final
 # get_grid_info(cas_endpoint, cas_port, BT, "worker-0.sas-cas-server-default.viya4deploy.svc.cluster.local", 244571)
 
-
-
-#schedule.every(30).seconds.do(fetch_and_update_prometrics)
-#schedule.every(30).seconds.do(fetch_and_update_prometrics_cpu_mem)
 
 if __name__ == "__main__":
     # Start Prometheus HTTP server
     start_http_server(8000)  # Port where Prometheus will scrape metrics
 
     # Schedule job
+    initial_session_list = []
     while True:
+
         fetch_and_update_prometrics()
-        fetch_and_update_prometrics_cpu_mem()
+        final_session_list = fetch_and_update_prometrics_cpu_mem(initial_session_list)
+        initial_session_list = final_session_list
         time.sleep(30)
 
 
