@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/SASViya_CAS_API_Prometrics.iml" filepath="$PROJECT_DIR$/.idea/SASViya_CAS_API_Prometrics.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/SASViya_CAS_Session_monitor.iml" filepath="$PROJECT_DIR$/.idea/SASViya_CAS_Session_monitor.iml" />
     </modules>
   </component>
 </project>
