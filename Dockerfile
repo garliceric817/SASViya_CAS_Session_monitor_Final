@@ -1,4 +1,4 @@
-# 使用官方的 Python base imae
+# 使用官方的 Python base image
 FROM python:3.9-slim
 
 # 跳至workspace
