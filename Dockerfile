@@ -1,20 +1,20 @@
-# 使用官方的 Python 基础镜像
+# 使用官方的 Python base imae
 FROM python:3.9-slim
 
-# 设置工作目录
+# 跳至workspace
 WORKDIR /app
 
-# 复制 requirements.txt 到容器中
+#  複製 requirements.txt 到容器中
 COPY requirements.txt .
 
-# 安装 Python 依赖
+# 安装 Python dependency
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制项目文件到容器中
+# 複製文件至容器
 COPY . .
 
 # 暴露 Prometheus 默认端口（如果需要）
 # EXPOSE 8000
 
-# 运行你的 Python 程序
+# 執行python code
 CMD ["python", "main.py"]
